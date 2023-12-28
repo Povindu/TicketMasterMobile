@@ -1,72 +1,79 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, Text, View, Button, Alert } from 'react-native';
+import { StyleSheet, Text, View, Button, Alert, Image } from 'react-native';
 import { BarCodeScanner } from 'expo-barcode-scanner';
 import {db} from './components/config';
-import {ref, set, onValue} from "firebase/database";
+import {ref, get, set, onValue, update, child} from "firebase/database";
 
 export default function App() {
 
   const [hasPermission, setHasPermission] = useState(null);
   const [scanned, setScanned] = useState(false);
   const [text, setText] = useState('Not yet scanned');
+  let modifiedTicketNo;
 
 
-  //firebase
-  function addTicket(ticketNo){
-    const reference = ref(db, 'tickets/' + ticketNo);
 
-    set(reference, {
-      checkIn : "False"
-    })
+  function checkTicket(dataIN){
+    let ticketNo;
+    if((Number.parseInt(dataIN.slice(3, 7),10) - 4900) == (Number.parseInt(dataIN.slice(9, 13),10) - 8458)){
+      ticketNo = Number.parseInt(dataIN.slice(3, 7),10) - 4900;
+    }
+
+    if(ticketNo<10){
+      modifiedTicketNo = 'T' + '00' + ticketNo.toString();
+    }
+    else if(ticketNo<100){
+      modifiedTicketNo = 'T' + '0' + ticketNo.toString();
+    }
+    else{
+      modifiedTicketNo = 'T' + ticketNo.toString();
+    }
+
+
+    let data; 
+    const reference = ref(db, 'ticketsTest/' + modifiedTicketNo);
+    get(reference)
+        .then((snapshot) => {
+          if (snapshot.exists()) {
+            data = snapshot.val();
+
+            if(data.checkIn == true){
+              Alert.alert("Validity",`Ticket NO:${modifiedTicketNo} is valid, Already checked in`,[
+              {text: "Scan Again", 
+              onPress: () => {
+                setScanned(false),
+                setText("Not yet scanned")
+                },
+              },
+              // {text: 'OK', onPress: () => console.log('OK Pressed')},
+              ])
+            }
+            else if(data.checkIn == false){
+              Alert.alert("Validity", `Ticket NO:${modifiedTicketNo} valid, Not checked in`,[
+                {
+                  text: "Check IN", 
+                  onPress: () => {
+                    update(reference, {
+                      checkIn : true
+                    })
+                    setScanned(false),
+                    setText("Not yet scanned")
+                  },
+              },
+              {text: 'OK', 
+              onPress: () => console.log('OK Pressed')},
+            ])
+            }
+          } 
+          else {
+            console.log("Data not available");
+          }
+        })
+        .catch((error) => {
+          console.error(error);
+        });
   }
-
-
-  function checkInTicket(ticketNo){
-    const reference = ref(db, 'tickets/' + ticketNo);
-    set(reference, {
-      checkIn : "True"
-    })
-  }
-
-  function checkTicket(ticketNo){
-    const reference = ref(db, 'tickets/' + ticketNo);
-
-    onValue(reference, (snapshot) => {
-      const data = snapshot.val();
-      if(data){
-
-        if(data.checkIn == "True"){
-          Alert.alert("Validity",`Ticket NO:${ticketNo} is valid, Already checked in`,[
-          {text: "Scan Again", 
-          onPress: () => {
-            setScanned(false),
-            setText("Not yet scanned")
-            },
-        },
-          // {text: 'OK', onPress: () => console.log('OK Pressed')},
-        ])
-        }
-
-        else if(data.checkIn == "False"){
-          Alert.alert("Validity", `Ticket NO:${ticketNo} valid, Not checked in`,[
-            {
-              text: "Check IN", 
-              onPress: () => checkInTicket(ticketNo),
-          },
-          {text: 'OK', 
-          onPress: () => console.log('OK Pressed')},
-        ])
-        }
-
-      }
-      else{
-        alert("No ticket found");
-      }
-
-    })
-  }
-
 
 
   const askForCameraPermission = () => {
@@ -101,8 +108,19 @@ export default function App() {
     </View>
   }
 
+
+
+
   return (
     <View style={styles.container}>
+
+      <Text style={{fontSize: 20, marginBottom: 20}}>Nilwala Ticket Master</Text>
+      <Image
+        style={styles.tinyLogo}
+        source={require('./assets/club_logo.png')}
+      />
+
+
       { !scanned && 
       < View style={styles.barcodebox}>
         <BarCodeScanner
@@ -112,21 +130,19 @@ export default function App() {
         </BarCodeScanner>
       </View>
       }
-      <Text style={styles.maintext}>Scanned Ticket No: {text}</Text>
-
-
-
+      
 
       
-      {scanned &&
+      { scanned &&
       <View>
+        <Text style={styles.maintext}>Scanned: {text}</Text>
         <Button title={'Tap to Scan Again'} onPress={() => {
           setScanned(false),
           setText("Not yet scanned")
           }} />
         <Button title={'Check Validity'} onPress={ ()=> checkTicket(text)} />
         <View style={{marginTop:100}}>
-          <Button  title={'Add Ticket'} onPress={ ()=> addTicket(text)} />
+          {/* <Button  title={'Add Ticket'} onPress={ ()=> addTicket(text)} /> */}
         </View>
       </View>
       }
@@ -134,6 +150,11 @@ export default function App() {
     </View>
   );
 }
+
+
+
+
+
 
 const styles = StyleSheet.create({
   container: {
@@ -155,5 +176,11 @@ const styles = StyleSheet.create({
   maintext:{
     fontSize: 16,
     margin: 20
+  },
+
+  tinyLogo: {
+    marginBottom:50,
+    width: 80,
+    height: 80,
   }
 });
